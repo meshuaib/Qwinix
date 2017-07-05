@@ -1,0 +1,707 @@
+{
+	  "AWSTemplateFormatVersion" : "2010-09-09",
+	  "Description" : "Cloud formation template for Iac Challenge",
+	   "Parameters" : {
+	   "KeyName" : {
+	      "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the bastion host",
+	      "Type" : "String",
+	      "MinLength": "1",
+	      "MaxLength": "64",
+	      "AllowedPattern" : "[-_ a-zA-Z0-9]*",
+	      "ConstraintDescription" : "can contain only alphanumeric characters, spaces, dashes and underscores."
+	               }
+			},
+		"Mappings" : {
+		"RegionToAmiMapForWebServer" : {
+		      "us-east-1" : { "WebServerAmi" : "ami-80861296" },
+              "us-east-2" : { "WebServerAmi" : "ami-618fab04" },
+			  "us-west-1" : { "WebServerAmi" : "ami-2afbde4a" },
+			  "us-west-2" : { "WebServerAmi" : "ami-efd0428f" },
+		   "ca-central-1" : { "WebServerAmi" : "ami-b3d965d7" },
+			  "eu-west-1" : { "WebServerAmi" : "ami-a8d2d7ce" },
+		   "eu-central-1" : { "WebServerAmi" : "ami-060cde69" },
+			  "eu-west-2" : { "WebServerAmi" : "ami-f1d7c395" },
+	     "ap-southeast-1" : { "WebServerAmi" : "ami-8fcc75ec" },
+		 "ap-southeast-2" : { "WebServerAmi" : "ami-96666ff5" },
+		 "ap-northeast-2" : { "WebServerAmi" : "ami-94d20dfa" },
+		 "ap-northeast-1" : { "WebServerAmi" : "ami-afb09dc8" },
+		     "ap-south-1" : { "WebServerAmi" : "ami-49e59a26" },
+			  "sa-east-1" : { "WebServerAmi" : "ami-34afc458" }
+	                                     },
+			"RegionToAmiMapForBastionHost" : {
+              "us-east-1" : { "BastionHostAmi" : "ami-80861296" },
+              "us-east-2" : { "BastionHostAmi" : "ami-618fab04" },
+			  "us-west-1" : { "BastionHostAmi" : "ami-2afbde4a" },
+			  "us-west-2" : { "BastionHostAmi" : "ami-efd0428f" },
+		   "ca-central-1" : { "BastionHostAmi" : "ami-b3d965d7" },
+			  "eu-west-1" : { "BastionHostAmi" : "ami-a8d2d7ce" },
+		   "eu-central-1" : { "BastionHostAmi" : "ami-060cde69" },
+			  "eu-west-2" : { "BastionHostAmi" : "ami-f1d7c395" },
+	     "ap-southeast-1" : { "BastionHostAmi" : "ami-8fcc75ec" },
+		 "ap-southeast-2" : { "BastionHostAmi" : "ami-96666ff5" },
+		 "ap-northeast-2" : { "BastionHostAmi" : "ami-94d20dfa" },
+		 "ap-northeast-1" : { "BastionHostAmi" : "ami-afb09dc8" },
+		     "ap-south-1" : { "BastionHostAmi" : "ami-49e59a26" },
+			  "sa-east-1" : { "BastionHostAmi" : "ami-34afc458" }
+			                                }
+				},
+	 "Resources" : {	  
+	  "VPC" : {
+	      "Type" : "AWS::EC2::VPC",
+		  "Metadata" : {
+                      "Comment" : "This is the VPC inside which all the servers will reside, It has two public subnets and 8 private subnets"
+			          },
+	      "Properties" : {
+	        "CidrBlock" : "10.0.0.0/16",
+			"EnableDnsHostnames" : "true",
+	        "Tags" : [
+			  {"Key" : "Name", "Value" : "IacChalange"},
+	          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+	          {"Key" : "Network", "Value" : "Public" }
+	        ]
+	      }
+	    },
+	    "PublicSubnet1" : {
+	      "Type" : "AWS::EC2::Subnet",
+		  "Metadata" : {
+                      "Comment" : "Public subnet #1 of the VPC"
+			          },
+	      "Properties" : {
+	        "VpcId" : { "Ref" : "VPC" },
+	        "CidrBlock" : "10.0.1.0/24",
+	        "AvailabilityZone" : { "Fn::Select" : ["0", { "Fn::GetAZs" : { "Ref" : "AWS::Region" } }]},
+	        "Tags" : [
+	          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+	          {"Key" : "Network", "Value" : "Public" }
+	        ]
+	      }
+	    },
+	
+	    "PublicSubnet2" : {
+	      "Type" : "AWS::EC2::Subnet",
+		   "Metadata" : {
+                      "Comment" : "Public subnet #2 of the VPC"
+			          },
+	      "Properties" : {
+	        "VpcId" : { "Ref" : "VPC" },
+	        "CidrBlock" : "10.0.2.0/24",
+	        "AvailabilityZone" : { "Fn::Select" : ["1", { "Fn::GetAZs" : { "Ref" : "AWS::Region" } }]},
+	        "Tags" : [
+	          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+	          {"Key" : "Network", "Value" : "Public" }
+	        ]
+	      }
+	    },
+	
+	    "InternetGateway" : {
+	      "Type" : "AWS::EC2::InternetGateway",
+		   "Metadata" : {
+                      "Comment" : "Internet gateway Attached to the VPC"
+			          },
+	      "Properties" : {
+	        "Tags" : [
+	          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+	          {"Key" : "Network", "Value" : "Public" }
+	        ]
+	      }
+	    },
+	
+	    "GatewayToInternet" : {
+	       "Type" : "AWS::EC2::VPCGatewayAttachment",
+		    "Metadata" : {
+                      "Comment" : "GatewayToInternet attached to the Internet Gateway"
+			          },
+	       "Properties" : {
+	         "VpcId" : { "Ref" : "VPC" },
+	         "InternetGatewayId" : { "Ref" : "InternetGateway" }
+	       }
+	    },
+	
+	    "PublicRouteTable" : {
+	      "Type" : "AWS::EC2::RouteTable",
+		  "Metadata" : {
+                      "Comment" : "public route table attached to the VPC"
+			          },
+	      "Properties" : {
+	        "VpcId" : {"Ref" : "VPC"},
+	        "Tags" : [
+	          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+	          {"Key" : "Network", "Value" : "Public" }
+	        ]
+	      }
+	    },
+	    "PublicRoute" : {
+	      "Type" : "AWS::EC2::Route",
+		   "Metadata" : {
+                      "Comment" : "Public route containing routing rules for public route table"
+			          },
+	      "DependsOn" : "GatewayToInternet",
+	      "Properties" : {
+	        "RouteTableId" : { "Ref" : "PublicRouteTable" },
+	        "DestinationCidrBlock" : "0.0.0.0/0",
+	        "GatewayId" : { "Ref" : "InternetGateway" }
+	       }
+	    },
+	    "PublicSubnetRouteTableAssociation1" : {
+	      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+		   "Metadata" : {
+                      "Comment" : "Association of public route table with Public subnet 1"
+			          },
+	      "Properties" : {
+	        "SubnetId" : { "Ref" : "PublicSubnet1" },
+	        "RouteTableId" : { "Ref" : "PublicRouteTable" }
+	      }
+	    },
+	    "PublicSubnetRouteTableAssociation2" : {
+	      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+		   "Metadata" : {
+                      "Comment" : "Association of public route table with Public subnet 2"
+			          },
+	      "Properties" : {
+	        "SubnetId" : { "Ref" : "PublicSubnet2" },
+	        "RouteTableId" : { "Ref" : "PublicRouteTable" }
+	      }
+	    },	
+	  "PublicNetworkAcl" : {
+      "Type" : "AWS::EC2::NetworkAcl",
+	   "Metadata" : {
+                      "Comment" : "Public network ACL for the VPC"
+			          },
+      "Properties" : {
+        "VpcId" : {"Ref" : "VPC"},
+        "Tags" : [
+          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+          {"Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+    "InboundPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+	  "Metadata" : {
+                      "Comment" : "NetworkAclEntry for outbound traffic for public network ACL"
+			          },
+      "Properties" : {
+        "NetworkAclId" : {"Ref" : "PublicNetworkAcl"},
+        "RuleNumber" : "100",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : {"From" : "0", "To" : "65535"}
+      }
+    },
+	"OutboundPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+	  "Metadata" : {
+                      "Comment" : "NetworkAclEntry for outbound traffic for public network ACL"
+			          },
+      "Properties" : {
+        "NetworkAclId" : {"Ref" : "PublicNetworkAcl"},
+        "RuleNumber" : "100",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "true",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : {"From" : "0", "To" : "65535"}
+      }
+    },
+    "PublicSubnetNetworkAclAssociation1" : {
+      "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+	   "Metadata" : {
+                      "Comment" : "Association of public subnet1 and public network ACL"
+			          },
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet1" },
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" }
+      }
+    },
+	
+    "PublicSubnetNetworkAclAssociation2" : {
+      "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+	   "Metadata" : {
+                      "Comment" : "Association of public subnet1 and public network ACL"
+			          },
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet2" },
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" }
+		}
+	},
+	 "PrivateSubnet1" : {
+	      "Type" : "AWS::EC2::Subnet",
+		  "Metadata" : {
+                      "Comment" : "private subnet 1"
+			          },
+	      "Properties" : {
+	        "VpcId" : { "Ref" : "VPC" },
+	        "CidrBlock" : "10.0.3.0/24",
+	        "AvailabilityZone" : { "Fn::Select" : ["0", { "Fn::GetAZs" : { "Ref" : "AWS::Region" } }]},
+	        "Tags" : [
+			  {"Key" : "Name", "Value" : "PrivateSubnet-az1"},  
+	          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+	          {"Key" : "Network", "Value" : "Private" }
+	        ]
+	      }
+	    },
+	
+	    "PrivateSubnet2" : {
+	      "Type" : "AWS::EC2::Subnet",
+		  "Metadata" : {
+                      "Comment" : "private subnet 2"
+			          },
+	      "Properties" : {
+	        "VpcId" : { "Ref" : "VPC" },
+	        "CidrBlock" : "10.0.4.0/24",
+	        "AvailabilityZone" : { "Fn::Select" : ["1", { "Fn::GetAZs" : { "Ref" : "AWS::Region" } }]},
+	        "Tags" : [
+			  {"Key" : "Name", "Value" : "PrivateSubnet-az2"},  
+	          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+	          {"Key" : "Network", "Value" : "Private" }
+	        ]
+	      }
+	    },
+	  "PrivateNetworkAcl" : {
+      "Type" : "AWS::EC2::NetworkAcl",
+	   "Metadata" : {
+                      "Comment" : "Public network ACL for the VPC"
+			          },
+      "Properties" : {
+        "VpcId" : {"Ref" : "VPC"},
+        "Tags" : [
+          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+          {"Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+
+    "InboundHTTPPrivateNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+	   "Metadata" : {
+                      "Comment" : "NetworkAclEntry for inbound HTTP traffic for public network ACL"
+			        },
+					  
+      "Properties" : {
+        "NetworkAclId" : {"Ref" : "PrivateNetworkAcl"},
+        "RuleNumber" : "100",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : {"From" : "80", "To" : "80"}
+      }
+    },
+    "InboundSSHPrivateNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+	  "Metadata" : {
+                      "Comment" : "NetworkAclEntry for inbound SSH traffic for public network ACL"
+			          },
+      "Properties" : {
+        "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+        "RuleNumber" : "102",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : { "From" : "22", "To" : "22" }
+      }
+    },  
+	"OutboundPrivateNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+	  "Metadata" : {
+                      "Comment" : "NetworkAclEntry for outbound traffic for public network ACL"
+			          },
+      "Properties" : {
+        "NetworkAclId" : {"Ref" : "PrivateNetworkAcl"},
+        "RuleNumber" : "100",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "true",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : {"From" : "0", "To" : "65535"}
+      }
+    },
+		"PrivateRouteTable1" : {
+	      "Type" : "AWS::EC2::RouteTable",
+		  "Metadata" : {
+                      "Comment" : "private route table 1"
+			          },
+	      "Properties" : {
+	        "VpcId" : {"Ref" : "VPC"},
+	        "Tags" : [
+	          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+	          {"Key" : "Network", "Value" : "Private" }
+	        ]
+	      }
+	    },
+	
+	    "PrivateRouteTable2" : {
+	      "Type" : "AWS::EC2::RouteTable",
+		  "Metadata" : {
+                      "Comment" : "private route table 2"
+			          },
+	      "Properties" : {
+	        "VpcId" : {"Ref" : "VPC"},
+	        "Tags" : [
+	          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+	          {"Key" : "Network", "Value" : "Private" }
+	        ]
+	      }
+	    },
+	    "PrivateSubnetRouteTableAssociation1" : {
+	      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+		  "Metadata" : {
+                      "Comment" : "Association of private subnet 1 and private route table 1"
+			          },
+	      "Properties" : {
+	        "SubnetId" : { "Ref" : "PrivateSubnet1" },
+	        "RouteTableId" : { "Ref" : "PrivateRouteTable1" }
+	      }
+	    },
+	
+	    "PrivateSubnetRouteTableAssociation2" : {
+	      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+		  "Metadata" : {
+                      "Comment" : "Association of private subnet 2 and private route table 2"
+			          },
+	      "Properties" : {
+	        "SubnetId" : { "Ref" : "PrivateSubnet2" },
+	        "RouteTableId" : { "Ref" : "PrivateRouteTable2" }
+	      }
+	    },
+	  "NATIPAddress1" : {
+      "Type" : "AWS::EC2::EIP",
+	  "Metadata" : {
+                      "Comment" : "Elastic IP creation for NATDevice2 Instance"
+			          },
+      "DependsOn" : "GatewayToInternet",
+      "Properties" : {
+        "Domain" : "vpc"
+      }
+              },
+	  "NATIPAddress2" : {
+      "Type" : "AWS::EC2::EIP",
+	  "Metadata" : {
+                      "Comment" : "Elastic IP creation for NATDevice2 Instance"
+			          },
+      "DependsOn" : "GatewayToInternet",
+      "Properties" : {
+        "Domain" : "vpc"
+      }
+    },
+	"NATIPAddress3" : {
+      "Type" : "AWS::EC2::EIP",
+	  "Metadata" : {
+                      "Comment" : "Elastic IP creation for NATDevice2 Instance"
+			          },
+      "DependsOn" : "GatewayToInternet",
+      "Properties" : {
+        "Domain" : "vpc",
+		"InstanceId" : { "Ref" : "BastionHost" }
+      }
+    },
+	  "NATGateway1" : {
+      "DependsOn" : "GatewayToInternet",
+      "Type" : "AWS::EC2::NatGateway",
+      "Properties" : {
+      "AllocationId" : { "Fn::GetAtt" : ["NATIPAddress1", "AllocationId"]},
+      "SubnetId" : { "Ref" : "PublicSubnet1"}
+              }
+            },
+	  "NATGateway2" : {
+      "DependsOn" : "GatewayToInternet",
+      "Type" : "AWS::EC2::NatGateway",
+      "Properties" : {
+      "AllocationId" : { "Fn::GetAtt" : ["NATIPAddress2", "AllocationId"]},
+      "SubnetId" : { "Ref" : "PublicSubnet2"}
+              }
+            },
+	    "PrivateRoute1" : {
+	      "Type" : "AWS::EC2::Route",
+		  "Metadata" : {
+                      "Comment" : "Private route 1 attached to nat device 1"
+			          },
+	      "Properties" : {
+	        "RouteTableId" : { "Ref" : "PrivateRouteTable1" },
+	        "DestinationCidrBlock" : "0.0.0.0/0",
+	        "NatGatewayId" : { "Ref" : "NATGateway1" }
+	      }
+	    },
+	    "PrivateRoute2" : {
+	      "Type" : "AWS::EC2::Route",
+		  "Metadata" : {
+                      "Comment" : "Private route 2 attached to nat device 2"
+			          },
+	      "Properties" : {
+	        "RouteTableId" : { "Ref" : "PrivateRouteTable2" },
+	        "DestinationCidrBlock" : "0.0.0.0/0",
+	        "NatGatewayId" : { "Ref" : "NATGateway1" }
+	      }
+	    },
+	  "BastionSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Metadata" : {
+                      "Comment" : "SecurityGroup for entities in public subnet"
+			          },
+        "Properties" : {
+        "GroupDescription" : "SecurityGroup for entities in public subnet",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" :  [ 
+                                    { "IpProtocol" : "TCP", "FromPort" : "22",  "ToPort" : "22","CidrIp" : "0.0.0.0/0" } 
+                                    
+								  ],
+        "SecurityGroupEgress" : [
+                                   
+                                    { "IpProtocol" : "TCP", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : "0.0.0.0/0"}
+               									
+		                        ]
+         }
+		 },
+	  "PublicSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Metadata" : {
+                      "Comment" : "SecurityGroup for entities in public subnet"
+			          },
+        "Properties" : {
+        "GroupDescription" : "SecurityGroup for entities in public subnet",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" :  [ 
+		                            { "IpProtocol" : "TCP", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0"},
+                                    { "IpProtocol" : "TCP", "FromPort" : "22",  "ToPort" : "22","SourceSecurityGroupId" : { "Ref" : "BastionSecurityGroup" } } 
+                                    
+								  ],
+        "SecurityGroupEgress" : [
+                                    { "IpProtocol" : "TCP", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0"},
+                                    { "IpProtocol" : "TCP", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : "0.0.0.0/0"}
+               									
+		                        ]
+         }
+		 },
+	  "WebServerSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Metadata" : {
+                      "Comment" : "SecurityGroup for entities in public subnet"
+			          },
+       "Properties" : {
+        "GroupDescription" : "SecurityGroup for entities in public subnet",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" :  [ 
+		                            { "IpProtocol" : "TCP", "FromPort" : "80",  "ToPort" :"80", "SourceSecurityGroupId" : { "Ref" : "PublicSecurityGroup" } }, 
+                                    { "IpProtocol" : "TCP", "FromPort" : "22",  "ToPort" : "22",  "SourceSecurityGroupId" : { "Ref" : "BastionSecurityGroup" } }       
+								  ],
+        "SecurityGroupEgress" : [
+                                    { "IpProtocol" : "TCP", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0"},
+                                    { "IpProtocol" : "TCP", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : "0.0.0.0/0"}
+               		            ]
+                    }
+      },
+	  
+   "S3Bucket": {
+    "Type" : "AWS::S3::Bucket",
+    "Properties" : {
+    "AccessControl":"PublicRead" ,
+    "BucketName" : "iacchallengebucketss"
+                    }
+       },
+	  "PolicyToAccessS3Bucket" : {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+      "PolicyName": { "Fn::Join": ["", [{"Ref": "AWS::Region"},"PolicyToAccessS3Bucket"]] },
+      "PolicyDocument": {
+         "Version" : "2012-10-17",
+         "Statement": [
+                        { 
+						 "Effect": "Allow", 
+			             "Action": [
+                                   "s3:Get*",
+                                   "s3:List*",
+								   "s3:Put*"
+                                   ], 
+			             "Resource": { "Fn::GetAtt" : [ "S3Bucket", "Arn" ] } 
+						}
+                      ]
+                     },
+      "Roles": [ { "Ref": "S3BucketAccessRole" } ]
+	          }
+           },
+   "ProfileForS3BucketAccessRole" : {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+      "Roles": [ {"Ref" : "S3BucketAccessRole"} ]
+                 }
+                         },	 
+    "S3BucketAccessRole": {
+    "Type": "AWS::IAM::Role",
+	"Properties": {
+	"AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "ec2.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+                    }
+            }
+         }, 
+     "ElasticLoadBalancerForWebservers" : {
+     "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+     "Properties" : {
+     "CrossZone" : "true",
+     "Listeners" : [ 
+      {
+        "InstancePort" : "80",
+        "InstanceProtocol" : "HTTP",
+        "LoadBalancerPort" : "80",
+        "Protocol" : "HTTP"
+      }            ],
+	"HealthCheck" : {
+      "Target": "HTTP:80/",
+      "HealthyThreshold" : "3",
+      "UnhealthyThreshold" : "5",
+      "Interval" : "30",
+      "Timeout" : "5"
+    },
+   "LoadBalancerName" : "WebServersBalancer",
+   "SecurityGroups":[ { "Ref" : "PublicSecurityGroup" } ],
+   "Subnets" : [ {"Ref" : "PublicSubnet1"},{"Ref" : "PublicSubnet2"} ]
+        }       
+   },
+   "BastionHost" : {
+	      "Type" : "AWS::EC2::Instance",
+		  "Metadata" : {
+                      "Comment" : "Bastion Host Instance"
+			          },
+	      "Properties" : {
+	      "InstanceType" : "t2.micro",
+	        "KeyName"  : { "Ref" : "KeyName" },
+	        "ImageId"  : { "Fn::FindInMap" : [ "RegionToAmiMapForBastionHost", { "Ref" : "AWS::Region" }, "BastionHostAmi"]},
+	        "NetworkInterfaces" : [{
+	          "GroupSet"                 : [{ "Ref" : "BastionSecurityGroup" }],
+	          "AssociatePublicIpAddress" : "true",
+	          "DeviceIndex"              : "0",
+	          "DeleteOnTermination"      : "true",
+	          "SubnetId"                 : { "Ref" : "PublicSubnet1" }
+	        }],
+	        "Tags" : [ 
+			            { 
+						  "Key" : "Name", 
+						  "Value" : "Bastion Host" 
+						 } 
+					  ]
+								
+	                     }
+			     },
+	"LaunchConfigForWebServer" : {
+    "Type" : "AWS::AutoScaling::LaunchConfiguration",
+	"Metadata" : {
+                      "Comment" : "LaunchConfiguration template for edge server"
+			          },
+    "Properties" : {
+	"KeyName"  : { "Ref" : "KeyName" },
+    "ImageId" : { "Fn::FindInMap" : [ "RegionToAmiMapForWebServer", { "Ref" : "AWS::Region" }, "WebServerAmi"]},
+	"IamInstanceProfile" : { "Ref" :"ProfileForS3BucketAccessRole" },
+    "SecurityGroups" : [ { "Ref" : "WebServerSecurityGroup" } ],
+    "InstanceType" : "t2.micro",
+	"UserData" : {"Fn::Base64": {"Fn::Join": ["\n", [
+						  "#!/bin/bash",
+						  "apt-get update -y",
+						  "apt-get install -y apache2",
+						  "rm /var/www/html/index.html",
+						  "echo \"IaC challenge completed: Shuaib Shaikh\" >> /var/www/html/index.html ",
+						  "service apache2 restart"
+						  ]]}}
+           }
+	},
+	"AutoScalingGroupForWebServer" : {
+        "Type" : "AWS::AutoScaling::AutoScalingGroup",
+		"Metadata" : {
+                      "Comment" : "Auto scaling group for Web server"
+			          },
+		"Properties" : {
+		"DesiredCapacity" : "2",
+		"HealthCheckType" : "EC2",
+		"LaunchConfigurationName" : { "Ref":"LaunchConfigForWebServer" },
+		"LoadBalancerNames" : [ { "Ref" : "ElasticLoadBalancerForWebservers" } ],
+		"MaxSize" : "4",
+		"MetricsCollection": [
+         {
+            "Granularity": "1Minute",
+            "Metrics": [
+               "GroupDesiredCapacity"
+            ]
+         }
+      ],
+		"MinSize" : "2",
+	"Tags" : [ {
+             "Key" : "Name",
+             "Value" : "WebServer",
+             "PropagateAtLaunch" : "true"
+         } ],
+	   "VPCZoneIdentifier":[{ "Ref" : "PrivateSubnet1" },{ "Ref" : "PrivateSubnet2" }]
+	 }
+			},
+   "ScaleUpPolicyForWebServer" : {
+   "Type" : "AWS::AutoScaling::ScalingPolicy",
+   "Metadata" : {
+                      "Comment" : "ScaleUp policy attached to the Auto scaling group for Web server"
+			          },
+   "Properties" : {
+      "AdjustmentType" : "ChangeInCapacity",
+      "AutoScalingGroupName" : { "Ref" : "AutoScalingGroupForWebServer" },
+      "Cooldown" : "60",
+      "ScalingAdjustment" : "1"
+                  }
+        },
+	"CPUHighAlarmForEdgeServer" : {
+    "Type" : "AWS::CloudWatch::Alarm",
+	"Metadata" : {
+                      "Comment" : "Alarm for Web servers it goes active when the CPU utilization is more than 80 percent for two consecutive minuites"
+			          },
+    "Properties" : {
+	"AlarmActions": [ { "Ref": "ScaleUpPolicyForWebServer" } ],
+    "AlarmDescription" : "CPU alarm for Edge Server",
+	"ComparisonOperator" : "GreaterThanThreshold",
+	"EvaluationPeriods" : "2",
+    "MetricName" : "CPUUtilization",
+    "Namespace" : "AWS/EC2",
+    "Period" : "60",
+    "Statistic" : "Average",
+	"Threshold" : "80"
+              }
+      },
+	"ScaleDownPolicyForWebServer" : {
+   "Type" : "AWS::AutoScaling::ScalingPolicy",
+   "Metadata" : {
+                      "Comment" : "ScaleUp policy attached to the Auto scaling group for Web server"
+			          },
+   "Properties" : {
+      "AdjustmentType" : "ChangeInCapacity",
+      "AutoScalingGroupName" : { "Ref" : "AutoScalingGroupForWebServer" },
+      "Cooldown" : "60",
+      "ScalingAdjustment" : "-1"
+                  }
+        },
+    "CPULowAlarmForEdgeServer" : {
+    "Type" : "AWS::CloudWatch::Alarm",
+	"Metadata" : {
+                      "Comment" : "Alarm for Web servers it goes active when the CPU utilization is more than 80 percent for two consecutive minuites"
+			          },
+    "Properties" : {
+	"AlarmActions": [ { "Ref": "ScaleDownPolicyForWebServer" } ],
+    "AlarmDescription" : "CPU alarm for Edge Server",
+	"ComparisonOperator" : "LessThanThreshold",
+	"EvaluationPeriods" : "2",
+    "MetricName" : "CPUUtilization",
+    "Namespace" : "AWS/EC2",
+    "Period" : "60",
+    "Statistic" : "Average",
+	"Threshold" : "20"
+              }
+      }
+  },
+  "Outputs": {
+  "BastionHostElasticIp": { "Value": { "Fn::GetAtt" : [ "BastionHost", "PublicIp" ] } },
+  "LoadBalancerDNS": { "Value": { "Fn::GetAtt" : [ "ElasticLoadBalancerForWebservers", "DNSName" ] } }
+		   }
+}
+  
